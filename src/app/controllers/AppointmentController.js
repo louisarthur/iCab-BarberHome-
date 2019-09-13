@@ -4,10 +4,15 @@ import * as Yup from 'yup';
  * cada provider poderá ppegar um usuário a cada uma hora e só poderá ser armazenado
  * datas que são futuras, tudo isso é resolvido nas regras de négocio do aplicativo
  */
-import { startOfHour, parseISO, isBefore } from 'date-fns';
+import { startOfHour, parseISO, isBefore, format, subHours } from 'date-fns';
+// importando esse pt para ele traduzir o mês do date-fns format
+import pt from 'date-fns/locale/pt';
 import User from '../models/User';
 import File from '../models/Files';
 import Appointment from '../models/Appointments';
+import Notification from '../schema/Notification';
+import MailCancelamento from '../jobs/EmailCancelamento';
+import Queue from '../../lib/Queue';
 
 class AppointmentController {
   async store(req, res) {
@@ -31,6 +36,11 @@ class AppointmentController {
     if (!isProvider) {
       return res.status(401).json({
         error: 'O agendamento só é possível com fornecedores de serviço',
+      });
+    }
+    if (isProvider.id === req.userId) {
+      return res.status(401).json({
+        error: 'O fornecedor de serviço não pode agendar consigo mesmo',
       });
     }
     /**
@@ -58,6 +68,7 @@ class AppointmentController {
         date: hourStart,
       },
     });
+
     if (providerAvaibility) {
       return res.status(400).json({
         error: 'O horário indisponível para este fornecedor de serviço',
@@ -72,6 +83,24 @@ class AppointmentController {
       provider_id,
       date,
     });
+
+    // para usar o nome do usuario para enviar
+    const user = await User.findByPk(req.userId);
+    // esse format vem do data-fns, e por padrão usaremos as aspas duplas para
+    // formatar o texto, pois o format pega aspas simples
+    const dateFormatted = format(
+      hourStart,
+      "'dia' dd 'de' MMMM', às' H:mm'h'",
+      { locale: pt }
+    );
+    // criar notificação com o conteúdo e o usuário que irá receber
+    await Notification.create({
+      content: `Novo agendamento de ${user.name} para ${dateFormatted}`,
+      user: provider_id,
+    });
+
+    // Iremos notificar o provider aqui, logo após criar o appointment
+
     return res.json(createAndStore);
   }
 
@@ -107,6 +136,51 @@ class AppointmentController {
     });
 
     return res.json(AppointmentsList);
+  }
+
+  // o include abaixo, básicamente ele tá pegando pela referencia do provider o nome e o email
+  // da tabela dos appoitments
+  // extraindo o nome do usuário para o email (nodemailer-handlebars)
+  async delete(req, res) {
+    const appointment = await Appointment.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'provider',
+          attributes: ['name', 'email'],
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['name'],
+        },
+      ],
+    });
+    // pensar numa forma de não se cancelar a atividade 2 vezes.
+    // checando se o usuário que está logado esta querendo deletar um appointment de outra pessoa!
+    if (appointment.user_id !== req.userId) {
+      return res.status(401).json({
+        error: 'Você não possui permissão para fazer essa alteração!',
+      });
+    }
+    // de acordo com a regra de negócio eu defini que o usuário só pode cancelar
+    // 3 horas antes, depois disso, o cancelamento não poderá ser feito e pagará multa
+    // o subhours faz a subtração de datas
+
+    const dateComSub = subHours(appointment.date, 3);
+    // verificando se está antes, se a data subtraída está antes da data atual
+    if (isBefore(dateComSub, new Date())) {
+      return res.status(401).json({
+        error:
+          'O evento só poderá ser cancelado no minimo 3 horas antes do acontecimento.',
+      });
+    }
+
+    appointment.canceled_at = new Date();
+    // salvando o bd
+    await appointment.save();
+    Queue.add(MailCancelamento.key, { appointment });
+    return res.json(appointment);
   }
 }
 export default new AppointmentController();

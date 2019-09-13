@@ -38,8 +38,6 @@ class ScheduleController {
     });
 
     return res.json(appointments);
-
-    // where provider:true,user_id:userId
   }
 }
 
