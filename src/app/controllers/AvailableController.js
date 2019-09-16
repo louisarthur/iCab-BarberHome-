@@ -25,7 +25,7 @@ class AvailableController {
     // se o agendanento não está candelado
     // e o appointment entre o começo do dia do search date
     // e o fim do dia do search date
-    const appointment = await Appointment.findAll({
+    const appointment = await Appointment.finddAll({
       where: {
         provider_id: req.params.idProvider,
         canceled_at: null,

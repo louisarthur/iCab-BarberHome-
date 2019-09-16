@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Multer from 'multer';
 import multerConfiguracao from './config/multer';
+// o sentry e o bugsnack são muitos bons para fazer tratamento de erro.
 
 import UserController from './app/controllers/UserController';
 import SessionsController from './app/controllers/SessionController';

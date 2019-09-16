@@ -1,4 +1,5 @@
 import Sequelize, { Model } from 'sequelize';
+import { process } from 'ipaddr.js';
 
 class File extends Model {
   static init(sequelize) {
@@ -15,7 +16,7 @@ class File extends Model {
             // para vizualizar a URL o usuário precisa enviar o token e para isso,
             // vamos em app.js e vamos utilizar o express.static, para usar arquivos staticos
             // usado do middleware
-            return `http://localhost:3333/file/${this.path}`;
+            return `${process.env.APP_URL}/file/${this.path}`;
           },
         },
       },

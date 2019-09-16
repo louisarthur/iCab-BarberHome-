@@ -115,7 +115,7 @@ class AppointmentController {
       // retornando pela ordem da data
       order: ['date'],
       // filtrando para receber somente id e date
-      attributes: ['id', 'date'],
+      attributes: ['id', 'date', 'past', 'cancellable'],
       // limite de mostrar somente de 20 em 20
       limit: 20,
       // calculo de offset, lembre-se que o offset é complementado pelo pelo limit
